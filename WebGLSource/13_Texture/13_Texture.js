@@ -1,16 +1,13 @@
 /*-----------------------------------------------------------------------------------
 13_Texture.js
-
-- Viewing a 3D unit cube at origin with perspective projection
-- Rotating the cube by ArcBall interface (by left mouse button dragging)
-- Applying image texture (../images/textures/woodWall2.png) to each face of the cube
 -----------------------------------------------------------------------------------*/
 
 import { resizeAspectRatio, Axes } from '../util/util.js';
 import { Shader, readShaderFile } from '../util/shader.js';
-import { Cube } from '../util/cube.js';
 import { Arcball } from '../util/arcball.js';
 import { loadTexture } from '../util/texture.js';
+import { RegularOctahedron } from './regularOctahedron.js';
+
 const canvas = document.getElementById('glCanvas');
 const gl = canvas.getContext('webgl2');
 let shader;
@@ -21,11 +18,10 @@ let viewMatrix = mat4.create();
 let projMatrix = mat4.create();
 let modelMatrix = mat4.create();
 const axes = new Axes(gl, 1.5); // create an Axes object with the length of axis 1.5
-const texture = loadTexture(gl, true, '../images/textures/woodWall3.png'); // see ../util/texture.js
-const cube = new Cube(gl);
+const texture = loadTexture(gl, true, '../images/textures/sunrise.jpg');
+const octahedron = new RegularOctahedron(gl);
 
 // Arcball object: initial distance 5.0, rotation sensitivity 2.0, zoom sensitivity 0.0005
-// default of rotation sensitivity = 1.5, default of zoom sensitivity = 0.001
 const arcball = new Arcball(canvas, 5.0, { rotation: 2.0, zoom: 0.0005 });
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -56,7 +52,7 @@ function initWebGL() {
     resizeAspectRatio(gl, canvas);
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(0.7, 0.8, 0.9, 1.0);
-    
+
     return true;
 }
 
@@ -67,26 +63,21 @@ async function initShader() {
 }
 
 function render() {
+    gl.clearColor(0.1, 0.2, 0.3, 1.0);  
 
-    // clear canvas
-    gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.DEPTH_TEST);
 
-    // get view matrix from the arcball
     const viewMatrix = arcball.getViewMatrix();
 
-    // drawing the cube
-    shader.use();  // using the cube's shader
+    shader.use();
     shader.setMat4('u_model', modelMatrix);
     shader.setMat4('u_view', viewMatrix);
     shader.setMat4('u_projection', projMatrix);
-    cube.draw(shader);
+    octahedron.draw(shader);
 
-    // drawing the axes (using the axes's shader: see util.js)
     axes.draw(viewMatrix, projMatrix);
 
-    // call the render function the next time for animation
     requestAnimationFrame(render);
 }
 
@@ -95,28 +86,23 @@ async function main() {
         if (!initWebGL()) {
             throw new Error('WebGL 초기화 실패');
         }
-        
+
         shader = await initShader();
 
-        // View transformation matrix (camera at (0,0,-3), invariant in the program)
         mat4.translate(viewMatrix, viewMatrix, vec3.fromValues(0, 0, -3));
 
-        // Projection transformation matrix (invariant in the program)
         mat4.perspective(
             projMatrix,
-            glMatrix.toRadian(60),  // field of view (fov, degree)
-            canvas.width / canvas.height, // aspect ratio
-            0.1, // near
-            100.0 // far
+            glMatrix.toRadian(60),
+            canvas.width / canvas.height,
+            0.1,
+            100.0
         );
 
-        // bind the texture to the shader
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, texture);
-
         shader.setInt('u_texture', 0);
 
-        // call the render function the first time for animation
         requestAnimationFrame(render);
 
         return true;
@@ -127,4 +113,3 @@ async function main() {
         return false;
     }
 }
-
