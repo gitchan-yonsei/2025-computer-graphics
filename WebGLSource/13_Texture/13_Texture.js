@@ -1,9 +1,5 @@
 /*-----------------------------------------------------------------------------------
-13_Texture.js (Modified)
-
-- Viewing a 3D regular octahedron with perspective projection
-- Rotating the octahedron by ArcBall interface (by left mouse button dragging)
-- Applying image texture (../images/textures/sunrise.jpg) to all 8 faces
+13_Texture.js
 -----------------------------------------------------------------------------------*/
 
 import { resizeAspectRatio, Axes } from '../util/util.js';
