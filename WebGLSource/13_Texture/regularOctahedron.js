@@ -7,15 +7,17 @@ export class RegularOctahedron {
     initBuffers() {
         const gl = this.gl;
 
-        // 정팔면체 정점: edge 길이 1, 중심 정사각형 xz 평면
+        const h = Math.SQRT1_2;  // == 1 / sqrt(2) ≈ 0.7071
+
         const vertices = new Float32Array([
-            0.0,  1.0,  0.0,  // 0: top
-            0.0, -1.0,  0.0,  // 1: bottom
-            -0.5,  0.0,  0.5, // 2: front-left
-             0.5,  0.0,  0.5, // 3: front-right
-             0.5,  0.0, -0.5, // 4: back-right
-            -0.5,  0.0, -0.5  // 5: back-left
+            0.0,  h,  0.0,  // 0: top
+            0.0, -h,  0.0,  // 1: bottom
+            -0.5,  0.0,  0.5, // 2
+             0.5,  0.0,  0.5, // 3
+             0.5,  0.0, -0.5, // 4
+            -0.5,  0.0, -0.5  // 5
         ]);
+        
 
         // 각 삼각형 face의 정점 인덱스
         const indices = new Uint16Array([
