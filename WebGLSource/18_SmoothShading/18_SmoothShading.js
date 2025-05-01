@@ -11,11 +11,11 @@
 - Applying Diffuse & Specular reflection using Flat/Smooth shading to the cone
 ----------------------------------------------------------------------------------*/
 
-import { resizeAspectRatio, setupText, updateText, Axes } from '../util/util.js';
+import { resizeAspectRatio, setupText, updateText } from '../util/util.js';
 import { Shader, readShaderFile } from '../util/shader.js';
 import { Cube } from '../util/cube.js';
 import { Arcball } from '../util/arcball.js';
-import { Cone } from './Cone.js'; 
+import { Cone } from './Cone.js'; 
 
 const canvas = document.getElementById('glCanvas');
 const gl = canvas.getContext('webgl2');
@@ -33,7 +33,6 @@ let shadingMode = 'SMOOTH';
 
 const cone = new Cone(gl, 32); // ✅ Cone 객체 생성
 const lamp = new Cube(gl);
-const axes = new Axes(gl, 1.5);
 
 const cameraPos = vec3.fromValues(0, 0, -3);
 const lightPos = vec3.fromValues(1.0, 0.7, 1.0);
@@ -122,7 +121,6 @@ function render() {
     lampShader.setMat4('u_view', viewMatrix);
     lamp.draw(lampShader);
 
-    axes.draw(viewMatrix, projMatrix);
     requestAnimationFrame(render);
 }
 
