@@ -1,158 +1,221 @@
-/*--------------------------------------------------------------------------------
-18_ConeShading.js
-
-- Viewing a 3D unit cone at origin with perspective projection
-- Rotating the cone by ArcBall interface (by left mouse button dragging)
-- Keyboard controls:
-    - 'a' to switch between camera and model rotation modes in ArcBall interface
-    - 'r' to reset arcball
-    - 's' to switch to smooth shading
-    - 'f' to switch to flat shading
-- Applying Diffuse & Specular reflection using Flat/Smooth shading to the cone
-----------------------------------------------------------------------------------*/
-
-import { resizeAspectRatio, setupText, updateText } from '../util/util.js';
+import { resizeAspectRatio, setupText, updateText} from '../util/util.js';
 import { Shader, readShaderFile } from '../util/shader.js';
 import { Cube } from '../util/cube.js';
 import { Arcball } from '../util/arcball.js';
-import { Cone } from './Cone.js'; 
+import { Cone } from './cone.js';
 
 const canvas = document.getElementById('glCanvas');
 const gl = canvas.getContext('webgl2');
 let shader;
 let lampShader;
-let textOverlay, textOverlay2, textOverlay3, textOverlay4, textOverlay5, textOverlay6;
+let textOverlay2;
+let textOverlay3;
 let isInitialized = false;
 
 let viewMatrix = mat4.create();
 let projMatrix = mat4.create();
 let modelMatrix = mat4.create();
 let lampModelMatrix = mat4.create();
-let arcBallMode = 'CAMERA';
-let shadingMode = 'SMOOTH';
+let arcBallMode = 'CAMERA';     // 'CAMERA' or 'MODEL'
+let shadingMode = 'SMOOTH';       // 'FLAT' or 'SMOOTH'
+let renderingMode = 'PHONG';   // 'GOURAUD' or 'PHONG' → shader 결정
+let shVertName = 'phongVert.glsl';
+let shFragName = 'phongFrag.glsl';
 
-const cone = new Cone(gl, 32); // ✅ Cone 객체 생성
+const cone = new Cone(gl, 32);
 const lamp = new Cube(gl);
 
-const cameraPos = vec3.fromValues(0, 0, -3);
+const cameraPos = vec3.fromValues(0, 0, 3);
 const lightPos = vec3.fromValues(1.0, 0.7, 1.0);
 const lightSize = vec3.fromValues(0.1, 0.1, 0.1);
 
+// Arcball object: initial distance 5.0, rotation sensitivity 2.0, zoom sensitivity 0.0005
+// default of rotation sensitivity = 1.5, default of zoom sensitivity = 0.001
 const arcball = new Arcball(canvas, 5.0, { rotation: 2.0, zoom: 0.0005 });
 
 document.addEventListener('DOMContentLoaded', () => {
-    if (isInitialized) return;
+    if (isInitialized) {
+        console.log("Already initialized");
+        return;
+    }
+
     main().then(success => {
-        if (!success) console.log('program terminated');
+        if (!success) {
+            console.log('program terminated');
+            return;
+        }
         isInitialized = true;
-    }).catch(console.error);
+    }).catch(error => {
+        console.error('program terminated with error:', error);
+    });
 });
 
 function setupKeyboardEvents() {
-    document.addEventListener('keydown', (event) => {
+    document.addEventListener('keydown', async (event) => {
         if (event.key == 'a') {
-            arcBallMode = arcBallMode === 'CAMERA' ? 'MODEL' : 'CAMERA';
-            updateText(textOverlay, "arcball mode: " + arcBallMode);
-        } else if (event.key == 'r') {
+            if (arcBallMode == 'CAMERA') {
+                arcBallMode = 'MODEL';
+            }
+            else {
+                arcBallMode = 'CAMERA';
+            }
+            updateText(textOverlay2, "arcball mode: " + arcBallMode);
+        }
+        else if (event.key == 'r') {
             arcball.reset();
-            modelMatrix = mat4.create();
+            modelMatrix = mat4.create(); 
             arcBallMode = 'CAMERA';
-            updateText(textOverlay, "arcball mode: " + arcBallMode);
-        } else if (event.key == 's') {
-            cone.copyVertexNormalsToNormals?.();  // 선택적 호출 (미구현 시 안전)
-            cone.updateNormals?.();
+            updateText(textOverlay2, "arcball mode: " + arcBallMode);
+        }
+        else if (event.key == 's') {
+            cone.copyVertexNormalsToNormals();
+            cone.updateNormals();
             shadingMode = 'SMOOTH';
-            updateText(textOverlay2, "shading mode: " + shadingMode);
-            render();
-        } else if (event.key == 'f') {
-            cone.copyFaceNormalsToNormals?.();
-            cone.updateNormals?.();
-            shadingMode = 'FLAT';
-            updateText(textOverlay2, "shading mode: " + shadingMode);
+            updateText(textOverlay3, "shading mode: " + shadingMode + " (" + renderingMode + ")");
             render();
         }
+        else if (event.key == 'f') {
+            cone.copyFaceNormalsToNormals();
+            cone.updateNormals();
+            shadingMode = 'FLAT';
+            updateText(textOverlay3, "shading mode: " + shadingMode + " (" + renderingMode + ")");
+            render();
+        }
+
+        if (event.key == 'g') {
+            if (shadingMode === 'FLAT') {
+                cone.copyFaceNormalsToNormals();
+            } else {
+                cone.copyVertexNormalsToNormals();
+            }
+            cone.updateNormals();
+
+            renderingMode = 'GOURAUD';
+            shVertName = 'gouraudVert.glsl';
+            shFragName = 'gouraudFrag.glsl';
+
+            await initShader(shVertName, shFragName);     // ★ shader 다시 로딩
+            setupShaderUniforms();
+
+            updateText(textOverlay3, "shading mode: " + shadingMode + " (" + renderingMode + ")");
+            render();
+        }
+        else if (event.key == 'p') {
+            if (shadingMode === 'FLAT') {
+                cone.copyFaceNormalsToNormals();
+            } else {
+                cone.copyVertexNormalsToNormals();
+            }
+            cone.updateNormals();
+
+            renderingMode = 'PHONG';
+            shVertName = 'phongVert.glsl';
+            shFragName = 'phongFrag.glsl';
+
+            await initShader(shVertName, shFragName);     // ★ shader 다시 로딩
+            setupShaderUniforms(); 
+
+            updateText(textOverlay3, "shading mode: " + shadingMode + " (" + renderingMode + ")");
+            render();
+        }
+        
     });
 }
 
 function initWebGL() {
     if (!gl) {
-        console.error('WebGL 2 is not supported.');
+        console.error('WebGL 2 is not supported by your browser.');
         return false;
     }
+
     canvas.width = 700;
     canvas.height = 700;
     resizeAspectRatio(gl, canvas);
     gl.viewport(0, 0, canvas.width, canvas.height);
-    gl.clearColor(0.7, 0.8, 0.9, 1.0);
+    gl.clearColor(0.1, 0.1, 0.1, 1.0);
+    
     return true;
 }
 
-async function initShader() {
-    const vertexShaderSource = await readShaderFile('shVert.glsl');
-    const fragmentShaderSource = await readShaderFile('shFrag.glsl');
-    return new Shader(gl, vertexShaderSource, fragmentShaderSource);
+async function initShader(vsPath, fsPath) {
+    const vertexShaderSource = await readShaderFile(vsPath);
+    const fragmentShaderSource = await readShaderFile(fsPath);
+    console.log(vsPath + " " + fsPath);
+    shader = new Shader(gl, vertexShaderSource, fragmentShaderSource);
 }
+
 
 async function initLampShader() {
     const vertexShaderSource = await readShaderFile('shLampVert.glsl');
     const fragmentShaderSource = await readShaderFile('shLampFrag.glsl');
-    return new Shader(gl, vertexShaderSource, fragmentShaderSource);
+    lampShader = new Shader(gl, vertexShaderSource, fragmentShaderSource);
 }
 
 function render() {
-    gl.clearColor(0.1, 0.1, 0.1, 1.0);
+    // clear canvas
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.DEPTH_TEST);
 
-    if (arcBallMode === 'CAMERA') {
+    if (arcBallMode == 'CAMERA') {
         viewMatrix = arcball.getViewMatrix();
-    } else {
+    }
+    else { // arcBallMode == 'MODEL'
         modelMatrix = arcball.getModelRotMatrix();
         viewMatrix = arcball.getViewCamDistanceMatrix();
     }
 
-    shader.use();
+    // drawing the cone
+    shader.use();  // using the cone's shader
     shader.setMat4('u_model', modelMatrix);
     shader.setMat4('u_view', viewMatrix);
     shader.setVec3('u_viewPos', cameraPos);
-    cone.draw(shader);  // ✅ Cone을 그린다
+    cone.draw(shader);
 
+    // drawing the lamp
     lampShader.use();
     lampShader.setMat4('u_view', viewMatrix);
     lamp.draw(lampShader);
 
+    // call the render function the next time for animation
     requestAnimationFrame(render);
 }
 
 async function main() {
     try {
-        if (!initWebGL()) throw new Error('WebGL init failed');
-
-        mat4.translate(viewMatrix, viewMatrix, cameraPos);
-
-        mat4.perspective(
-            projMatrix,
-            glMatrix.toRadian(60),
-            canvas.width / canvas.height,
-            0.1,
-            100.0
+        if (!initWebGL()) {
+            throw new Error('WebGL initialization failed');
+        }
+        
+        // View transformation matrix (camera at cameraPos, invariant in the program)
+        mat4.lookAt(
+            viewMatrix,
+            cameraPos, // camera position
+            vec3.fromValues(0, 0, 0), // look at point
+            vec3.fromValues(0, 1, 0)  // up vector
         );
 
-        shader = await initShader();
-        lampShader = await initLampShader();
+        // Projection transformation matrix (invariant in the program)
+        mat4.perspective(
+            projMatrix,
+            glMatrix.toRadian(60),  // field of view (fov, degree)
+            canvas.width / canvas.height, // aspect ratio
+            0.1, // near
+            100.0 // far
+        );
 
-        shader.use();
-        shader.setMat4("u_projection", projMatrix);
+        // creating shaders
+        // await initShader();
+        await initShader(shVertName, shFragName);
+        await initLampShader();
 
-        shader.setVec3("material.diffuse", vec3.fromValues(1.0, 0.5, 0.31));
-        shader.setVec3("material.specular", vec3.fromValues(0.5, 0.5, 0.5));
-        shader.setFloat("material.shininess", 16);
+        setupShaderUniforms();
 
-        shader.setVec3("light.position", lightPos);
-        shader.setVec3("light.ambient", vec3.fromValues(0.2, 0.2, 0.2));
-        shader.setVec3("light.diffuse", vec3.fromValues(0.7, 0.7, 0.7));
-        shader.setVec3("light.specular", vec3.fromValues(1.0, 1.0, 1.0));
-        shader.setVec3("u_viewPos", cameraPos);
+        if (shadingMode === 'FLAT') {
+            cone.copyFaceNormalsToNormals();
+        } else {
+            cone.copyVertexNormalsToNormals();
+        }
+        cone.updateNormals();
 
         lampShader.use();
         lampShader.setMat4("u_projection", projMatrix);
@@ -160,19 +223,42 @@ async function main() {
         mat4.scale(lampModelMatrix, lampModelMatrix, lightSize);
         lampShader.setMat4('u_model', lampModelMatrix);
 
-        textOverlay = setupText(canvas, "arcball mode: " + arcBallMode);
-        textOverlay2 = setupText(canvas, "shading mode: " + shadingMode, 2);
-        textOverlay3 = setupText(canvas, "press 'a' to change arcball mode", 3);
-        textOverlay4 = setupText(canvas, "press 'r' to reset arcball", 4);
-        textOverlay5 = setupText(canvas, "press 's' to switch to smooth shading", 5);
-        textOverlay6 = setupText(canvas, "press 'f' to switch to flat shading", 6);
+        setupText(canvas, "Smooth Shading", 1);
+        textOverlay2 = setupText(canvas, "arcball mode: " + arcBallMode, 2);
+        textOverlay3 = setupText(canvas, "shading mode: " + shadingMode + " (" + renderingMode + ")", 3);
+        setupText(canvas, "press 'a' to change arcball mode", 4);
+        setupText(canvas, "press 'r' to reset arcball", 5);
+        setupText(canvas, "press 's' to switch to smooth shading", 6);
+        setupText(canvas, "press 'f' to switch to flat shading", 7);
+        setupText(canvas, "press 'g' to switch to Gouraud shading", 8);
+        setupText(canvas, "press 'p' to switch to Phong shading", 9);
         setupKeyboardEvents();
 
+        // call the render function the first time for animation
         requestAnimationFrame(render);
+
         return true;
+
     } catch (error) {
-        console.error(error);
+        console.error('Failed to initialize program:', error);
         alert('Failed to initialize program');
         return false;
     }
 }
+
+function setupShaderUniforms() {
+    shader.use();
+    shader.setMat4("u_projection", projMatrix);
+    
+    shader.setVec3("material.diffuse", vec3.fromValues(1.0, 0.5, 0.31));
+    shader.setVec3("material.specular", vec3.fromValues(0.5, 0.5, 0.5));
+    shader.setFloat("material.shininess", 16);
+    
+    shader.setVec3("light.position", lightPos);
+    shader.setVec3("light.ambient", vec3.fromValues(0.2, 0.2, 0.2));
+    shader.setVec3("light.diffuse", vec3.fromValues(0.7, 0.7, 0.7));
+    shader.setVec3("light.specular", vec3.fromValues(1.0, 1.0, 1.0));
+    shader.setVec3("u_viewPos", cameraPos);
+}
+
+
