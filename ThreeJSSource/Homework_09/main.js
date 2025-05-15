@@ -68,17 +68,18 @@ const controls = new function () {
     this.currentCamera = "Perspective";
     this.switchCamera = function () {
         const aspect = window.innerWidth / window.innerHeight;
-        const distance = 150; // 🌟 perspective camera position z 값과 동일
-        const frustumSize = 100; // 🌟 tuning parameter. 50~100 정도 추천
+        const perspectiveDistance = camera.position.z;  // 기존 camera 위치 그대로 사용
+        const fov = THREE.MathUtils.degToRad(camera.fov); // 기존 perspective fov 사용
+        const frustumHeight = 2 * perspectiveDistance * Math.tan(fov / 2);
     
         if (camera instanceof THREE.PerspectiveCamera) {
             // ➡ Orthographic으로 변경
             camera = new THREE.OrthographicCamera(
-                (frustumSize * aspect) / -2, (frustumSize * aspect) / 2,
-                frustumSize / 2, frustumSize / -2,
+                -frustumHeight * aspect / 2, frustumHeight * aspect / 2,
+                frustumHeight / 2, -frustumHeight / 2,
                 0.1, 1000
             );
-            camera.position.set(0, 50, distance);
+            camera.position.set(0, 50, perspectiveDistance);
             camera.lookAt(scene.position);
             orbitControls.dispose();
             orbitControls = new OrbitControls(camera, renderer.domElement);
@@ -87,7 +88,7 @@ const controls = new function () {
         } else {
             // ➡ Perspective로 변경
             camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
-            camera.position.set(0, 50, distance);
+            camera.position.set(0, 50, perspectiveDistance);
             camera.lookAt(scene.position);
             orbitControls.dispose();
             orbitControls = new OrbitControls(camera, renderer.domElement);
@@ -95,6 +96,7 @@ const controls = new function () {
             this.currentCamera = "Perspective";
         }
     };
+    
     
 };
 const cameraFolder = gui.addFolder('Camera');
