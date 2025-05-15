@@ -58,7 +58,7 @@ planetsData.forEach(data => {
 });
 
 // 🌟 Light
-const light = new THREE.PointLight(0xffffff, 2, 500);
+const light = new THREE.PointLight(0xffffff, 10000, 0); // distance = 0 → 무한
 light.position.set(0, 0, 0);
 scene.add(light);
 
